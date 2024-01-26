@@ -1,0 +1,276 @@
+import pyawr
+import pyawr.mwoffice as mwo
+import time
+import math
+import matplotlib.pyplot as plt
+import scipy
+
+awrde = mwo.CMWOffice()
+
+if  not awrde.Project.EMStructures.Exists("EM Structure 2"):
+    awrde.Project.EMStructures.Add("EM Structure 2")
+
+em = awrde.Project.EMStructures("EM Structure 2")
+#graph = awrde.Project.Graphs("Graph 1")
+# lead_spacing='0.005mm' lead_w='0.00827896825396821mm' Length='0.5mm' LTO_t='0.001mm' metal_t='0.00127262626262626mm' trace_w='0.005mm' Width='0.5mm' xoffset='0.345253267973856mm' [Curve72]"
+#peak: 115
+#trough: 100
+## units in microns ##
+wafer_t = 0.72
+SiO2_t = 0.01875
+
+Width = 250
+Length = 500
+lead_spacing = 15
+lead_l = 550
+trace_w = 5
+
+period = 5
+delay = 50
+peak = 115
+trough = 0
+
+enc_l = 1000
+enc_w = 1500
+em.Enclosure.XDimension = enc_l*1e-6
+em.Enclosure.YDimension = enc_w*1e-6
+
+metal_t = 1
+LTO_t = 3
+DUT_w = 10
+
+void_w = 0
+draw_void = True
+
+#split ring resonnator#
+num_cells = 0
+
+try: 
+    cell_size = enc_l/num_cells
+except:
+    pass
+r1_d = 40   #ring1 diameter
+r1_w = 3    #ring1 width
+r1_g = 1    #ring1 gap
+r2_d = 50   #ring2 diameter
+r2_w = 3    #ring2 width
+r2_g = 1    #ring2 gap
+
+
+def draw_resonnator():
+    x_base = 0
+    y_base = 0
+    for i in range(num_cells):
+        for j in range(num_cells):
+            ring_2 = em.Shapes.AddRectangle((x_base+(cell_size-r2_d)/2)*1e-6, (y_base+(cell_size-r2_d)/2)*1e-6,r2_d*1e-6,r2_d*1e-6,"Gatepad")
+            em.SelectedObjects.AddFromArea(x_base*1e-6, (y_base+cell_size)*1e-6, (x_base+cell_size)*1e-6, y_base*1e-6)
+            ring_2n = em.Shapes.AddRectangle((x_base+r2_w+(cell_size-r2_d)/2)*1e-6, (y_base+r2_w+(cell_size-r2_d)/2)*1e-6,(r2_d-r2_w*2)*1e-6,(r2_d-r2_w*2)*1e-6,"Gatepad")
+            gap = em.Shapes.AddRectangle((x_base+(cell_size-r2_g)/2)*1e-6, (y_base+(cell_size-r2_d)/2)*1e-6,(r2_g)*1e-6,(r1_w)*1e-6, "Gatepad")
+            em.SelectedObjects.AddFromArea(x_base*1e-6, (y_base+cell_size)*1e-6, (x_base+cell_size)*1e-6, y_base*1e-6)
+            em.InvokeCommand("ShapeSubtract", 1, ring_2)
+            em.SelectedObjects.RemoveAll()
+            x_base+=cell_size
+        x_base=0
+        y_base+=cell_size
+
+    x_base=0
+    y_base=0
+    for i in range(num_cells):
+        for j in range(num_cells):
+            ring_1 = em.Shapes.AddRectangle((x_base+(cell_size-r1_d)/2)*1e-6, (y_base+(cell_size-r1_d)/2)*1e-6,r1_d*1e-6,r1_d*1e-6,"Gatepad")
+            em.SelectedObjects.AddFromArea((x_base+(cell_size-r1_d)/2)*1e-6, (y_base+(cell_size-r1_d)/2+r1_d)*1e-6, (x_base+(cell_size-r1_d)/2+r1_d)*1e-6, (y_base+(cell_size-r1_d)/2)*1e-6)
+            ring_1n = em.Shapes.AddRectangle((x_base+r1_w+(cell_size-r1_d)/2)*1e-6, (y_base+r1_w+(cell_size-r1_d)/2)*1e-6,(r1_d-r1_w*2)*1e-6,(r1_d-r1_w*2)*1e-6,"Gatepad")
+            while(1): break
+            gap = em.Shapes.AddRectangle((x_base+(cell_size-r1_g)/2)*1e-6, (y_base+(cell_size+r1_d)/2-r1_w)*1e-6,(r1_g)*1e-6,(r1_w)*1e-6, "Gatepad")
+            em.SelectedObjects.AddFromArea((x_base+(cell_size-r1_d)/2)*1e-6, (y_base+(cell_size+r1_d)/2)*1e-6, (x_base+(cell_size-r1_d)/2+r1_d)*1e-6, (y_base+(cell_size-r1_d)/2)*1e-6)
+            print(em.SelectedObjects.Count)
+            while(1): break
+            em.InvokeCommand("ShapeSubtract", 1, ring_1)
+            while(1): break
+            em.SelectedObjects.RemoveAll()
+            x_base+=cell_size
+
+        x_base=0
+        y_base+=cell_size
+    
+
+def draw_antenna():
+    pathWrite = em.DrawingObjects.PathWriter
+    pathWrite.LayerName = "Thick Metal"
+    pathWrite.Width = trace_w*1e-6
+    pathRec = pathWrite.CreatePathRecord()
+
+    x = 0
+    y = trace_w/2
+    pathRec.AddSegment(x*1e-6,y*1e-6)
+    y = lead_l
+    pathRec.AddSegment(x*1e-6,y*1e-6)
+    x = x-Length/2+lead_spacing/2
+    pathRec.AddSegment(x*1e-6,y*1e-6)
+    y = y+Width
+    pathRec.AddSegment(x*1e-6,y*1e-6)
+    x = x+delay
+    pathRec.AddSegment(x*1e-6,y*1e-6)
+    y_mid = y
+    for i in range(period):
+        y=y_mid
+        if not(i%2):
+            y += peak
+        else:
+            y-=trough
+        pathRec.AddSegment(x*1e-6,y*1e-6)
+        if i==period-2:
+              pathRec.AddSegment(x*1e-6,y*1e-6)    
+        x+=(Length-2*delay)/(period*2-1)
+        pathRec.AddSegment(x*1e-6,y*1e-6)
+    pathRec.AddSegment(x*1e-6,y*1e-6)
+    pathRec.Offset(((enc_l-lead_spacing)/2-trace_w)*1e-6,0)
+    path = pathWrite.AddPath(pathRec)  
+    pathRec.Mirror((enc_l/2 - trace_w)*1e-6)
+    path1 = pathWrite.AddPath(pathRec)
+                                                                                         ##Port Number##
+    em.Shapes.AddFace(((enc_l-lead_spacing)/2-trace_w)*1e-6,0,(enc_l-lead_spacing)/2*1e-6,0, int(1))
+    port1 = em.Ports.Item(1)
+    port1.ReferencePlaneDist = lead_l * 0.9e-6
+    em.Shapes.AddFace(((enc_l+lead_spacing)/2)*1e-6,0, ((enc_l+lead_spacing)/2+trace_w)*1e-6,0, int(2))
+    port2 = em.Ports.Item(2)
+    port2.ReferencePlaneDist = lead_l * 0.9e-6
+    
+
+def draw_interconnect():
+    interconnect = em.DrawingObjects.AddRectangle(0, (enc_w-DUT_w)/2*1e-6, enc_l*1e-6, DUT_w*1e-6, "Gatepad")
+    port3 = em.Shapes.AddFace(0, (enc_w-DUT_w)/2*1e-6, 0, (enc_w/2+DUT_w)*1e-6, 3)
+    port3 = em.Ports.Item(3)
+    port4 = em.Shapes.AddFace(enc_l*1e-6, (enc_w-DUT_w)/2*1e-6, enc_l*1e-6, (enc_w/2+DUT_w)*1e-6, 4)
+    void = em.DrawingObjects.AddEllipse((enc_l/2)*1e-6, (enc_w - DUT_w - void_w)/2*1e-6, void_w*1e-6, void_w*1e-6, "Gatepad")
+    em.SelectedObjects.Add(interconnect)
+    em.SelectedObjects.Add(void)
+    em.InvokeCommand("ShapeSubtract", 2, None)
+  
+ 
+def reset():
+    #print("previous object count: ", em.DrawingObjects.Count)
+    em.SelectedObjects.AddAll()
+    for i in range(em.SelectedObjects.Count):
+        try:
+            em.SelectedObjects(1).Delete()
+        except:
+            print("object not deleted")
+    #print("final object count: ", em.DrawingObjects.Count)
+
+   
+def output():
+    graph = awrde.Project.Graphs("Graph 1")
+    #print(type(graph))
+    graph.SimulateMeasurements()
+    # graph_printed = graph.ExportTraceData("C:/Users/muhaa/Documents/AWR Projects/data/void_testing/{}".format(lead_l - 500))  ##for spacial resolution testing
+    graph_printed = graph.ExportTraceData("C:/Users/muhaa/Documents/AWR Projects/data/void testing/{}".format(void_w))
+    #print("graph printed for lead_l {}: {}".format(lead_l, graph_printed))
+
+
+
+def graph():
+    i = 0
+    x = []
+    S13 = []
+    for i in range(190, 710):
+        try: 
+            with open("C:/Users/muhaa/Documents/AWR Projects/data/x_resolution/{}".format(i), 'r') as f: 
+                lines = f.readlines()
+                labels = lines.pop(0)
+                parameters = lines.pop(0)       #this line is only for smith charts, comment out if data comes from table
+                for line in lines:
+                    print(line)
+                    meas = line.split("\t")
+                    freq = meas[0]
+                    real = float(meas[1].strip())
+                    imag = float(meas[2].strip())
+                    S13.append(math.sqrt(real**2 + imag**2))
+                    x.append(i)
+                    break
+        except:
+            pass
+    plt.plot(x, S13)
+    plt.show()
+    max_pwr = max(S13)
+    dB = []
+
+   
+
+    for i in S13:
+        dB.append(10 * math.log10(i/max_pwr))
+
+
+    interp = scipy.interpolate.CubicSpline(x, dB)
+
+    cutoffs = interp.solve(-3.0)            #spatial resolution cutoff (dB)
+    spatial_res = abs(cutoffs[0] - cutoffs[1])
+    print(spatial_res)
+
+
+    #plt.axhline(y = -3, color = 'r', linestyle = '-') #horizontal line at -3dB cutoff
+    plt.axvline(x = cutoffs[0], color = 'b', linestyle = '-')
+    plt.axvline(x = cutoffs[1], color = 'b', linestyle = '-')
+    plt.ylabel("S(1,2) Coupling (dB)")
+    plt.xlabel("x-offset (um)")
+    plt.title("Coupling between DUT and antenna vs x-offset")
+   
+     
+    plt.plot(x, dB)
+    plt.show()
+
+
+
+def space_res():
+    global lead_l       #every other scope sees changes made to lead_l here
+    for i in range(200, 300, 10):
+        lead_l = i
+        reset()
+        draw_antenna()
+        draw_interconnect()
+        output()    #simulates and outputs
+        print("simulation done for lead_l:  {}".format(lead_l))
+
+
+def void_testing():
+    global void_w   #every other scope sees changes made to void_w here
+    for i in range(10, 22):
+        void_w = i
+        reset()
+        draw_antenna()
+        draw_interconnect()
+        output()    #simulates and outputs
+        print("simulation done for void_w:  {}".format(void_w))
+        
+def main():
+    #void_testing()
+    graph()
+  
+main()
+
+
+
+#base lead_l position in y direction: 500
+
+
+# for i in range(shape_count):
+#     print(em.Shapes(i+1).Type)
+    
+#em.DrawingObjects.RemoveAll()
+#em.Drawing.Objects.RemoveAll
+# for i in range(em.DrawingObjects.Count):
+#     print(i)
+#     em.DrawingObjects(i+1).Delete()
+
+#em.SelectedObjects.RemoveAll()
+
+#em.DrawingObjects.Item(1).Delete()
+#path1 = em.Shapes.AddPath([(1e-6,0),(100e-6,0)])
+
+
+# print("num material layers: ", em.MaterialLayers.Count) #Print Dielectric
+# for i in range(em.MaterialLayers.Count):
+#     print(em.MaterialLayers[i].Name)
+
+# for i in range(em.Shapes.Count):  #Print each shape's drawing layer
+#     print(em.Shapes[i].DrawingLayer.Name)
