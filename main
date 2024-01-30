@@ -4,6 +4,11 @@ import time
 import math
 import matplotlib.pyplot as plt
 import scipy
+import numpy as np
+import os
+import re
+
+path = "C:/Users/muhaa/Desktop/Research/Journal paper/data/"
 
 awrde = mwo.CMWOffice()
 
@@ -11,6 +16,7 @@ if  not awrde.Project.EMStructures.Exists("EM Structure 2"):
     awrde.Project.EMStructures.Add("EM Structure 2")
 
 em = awrde.Project.EMStructures("EM Structure 2")
+
 #graph = awrde.Project.Graphs("Graph 1")
 # lead_spacing='0.005mm' lead_w='0.00827896825396821mm' Length='0.5mm' LTO_t='0.001mm' metal_t='0.00127262626262626mm' trace_w='0.005mm' Width='0.5mm' xoffset='0.345253267973856mm' [Curve72]"
 #peak: 115
@@ -22,7 +28,7 @@ SiO2_t = 0.01875
 Width = 250
 Length = 500
 lead_spacing = 15
-lead_l = 550
+lead_l = 20
 trace_w = 5
 
 period = 5
@@ -30,16 +36,16 @@ delay = 50
 peak = 115
 trough = 0
 
-enc_l = 1000
-enc_w = 1500
+enc_l = 550
+enc_w = 400
 em.Enclosure.XDimension = enc_l*1e-6
 em.Enclosure.YDimension = enc_w*1e-6
 
-metal_t = 1
+metal_t = 0.001
 LTO_t = 3
 DUT_w = 10
 
-void_w = 0
+void_w = 10
 draw_void = True
 
 #split ring resonnator#
@@ -93,7 +99,6 @@ def draw_resonnator():
         x_base=0
         y_base+=cell_size
     
-
 def draw_antenna():
     pathWrite = em.DrawingObjects.PathWriter
     pathWrite.LayerName = "Thick Metal"
@@ -131,23 +136,22 @@ def draw_antenna():
                                                                                          ##Port Number##
     em.Shapes.AddFace(((enc_l-lead_spacing)/2-trace_w)*1e-6,0,(enc_l-lead_spacing)/2*1e-6,0, int(1))
     port1 = em.Ports.Item(1)
-    port1.ReferencePlaneDist = lead_l * 0.9e-6
+    port1.ReferencePlaneDist = lead_l * 0.6e-6
     em.Shapes.AddFace(((enc_l+lead_spacing)/2)*1e-6,0, ((enc_l+lead_spacing)/2+trace_w)*1e-6,0, int(2))
     port2 = em.Ports.Item(2)
-    port2.ReferencePlaneDist = lead_l * 0.9e-6
+    port2.ReferencePlaneDist = lead_l * 0.6e-6
     
-
 def draw_interconnect():
-    interconnect = em.DrawingObjects.AddRectangle(0, (enc_w-DUT_w)/2*1e-6, enc_l*1e-6, DUT_w*1e-6, "Gatepad")
+    interconnect = em.DrawingObjects.AddRectangle(0, math.floor((enc_w-DUT_w)/2)*1e-6, enc_l*1e-6, math.floor(DUT_w)*1e-6, "Gatepad")
     port3 = em.Shapes.AddFace(0, (enc_w-DUT_w)/2*1e-6, 0, (enc_w/2+DUT_w)*1e-6, 3)
     port3 = em.Ports.Item(3)
-    port4 = em.Shapes.AddFace(enc_l*1e-6, (enc_w-DUT_w)/2*1e-6, enc_l*1e-6, (enc_w/2+DUT_w)*1e-6, 4)
+    port4 = em.Shapes.AddFace(enc_l*1e-6, math.floor((enc_w-DUT_w)/2)*1e-6, enc_l*1e-6, math.floor((enc_w/2+DUT_w))*1e-6, 4)
     void = em.DrawingObjects.AddEllipse((enc_l/2)*1e-6, (enc_w - DUT_w - void_w)/2*1e-6, void_w*1e-6, void_w*1e-6, "Gatepad")
     em.SelectedObjects.Add(interconnect)
     em.SelectedObjects.Add(void)
     em.InvokeCommand("ShapeSubtract", 2, None)
-  
  
+  
 def reset():
     #print("previous object count: ", em.DrawingObjects.Count)
     em.SelectedObjects.AddAll()
@@ -157,15 +161,60 @@ def reset():
         except:
             print("object not deleted")
     #print("final object count: ", em.DrawingObjects.Count)
-
    
-def output():
-    graph = awrde.Project.Graphs("Graph 1")
+def output(graph, folder, title):
+    graph = awrde.Project.Graphs(graph)
     #print(type(graph))
     graph.SimulateMeasurements()
     # graph_printed = graph.ExportTraceData("C:/Users/muhaa/Documents/AWR Projects/data/void_testing/{}".format(lead_l - 500))  ##for spacial resolution testing
-    graph_printed = graph.ExportTraceData("C:/Users/muhaa/Documents/AWR Projects/data/void testing/{}".format(void_w))
-    #print("graph printed for lead_l {}: {}".format(lead_l, graph_printed))
+    print(path + folder + title + ".txt")
+    graph_printed = graph.ExportTraceData(path + folder + title)
+    print(graph_printed)
+    #print("graph printeda for lead_l {}: {}".format(lead_l, graph_printed))
+
+def figure1():                             #figure 1: coupling vs void_width for each DUT_w
+    global void_w   #every other scope sees changes made to void_w here
+    global DUT_w
+    for i in range(5, 55, 5):              #interconnect width
+        DUT_w = i                  
+        radius_range = np.linspace(0, i*2, num=10, endpoint=True)              #void radius   
+        #print(radius_range)
+   
+        for j in radius_range:      
+            void_w = j                                        #void radius loop
+            reset()
+            draw_antenna()
+            draw_interconnect()
+            output("Differential Mode", "figure1/", "DUTw{}_voidw{}".format(int(DUT_w*1000), int(void_w*1000)))
+
+def plot_figure1():
+    f1_path = path + "figure1/"
+    file_list = os.listdir(f1_path)
+    traces = {"DUTw": {}}
+    for filename in file_list:
+        numbers = re.findall(r'\d+', filename)               #list of group numbers
+        DUTw = str(float(numbers[0])/1000)                                    #DUTw numeric value
+        voidw = numbers[1]                                  #voidw numeric
+        words = re.findall(r'[a-zA-Z]+', filename)        #list of grouped letters, DUTw, voidw
+        if(str(DUTw) not in traces["DUTw"]):
+            traces["DUTw"][str(DUTw)] = {"voidw": [], "|DM|": []}
+
+        traces["DUTw"][str(DUTw)]["voidw"].append(float(voidw)/1000)
+        with open(f1_path + filename, 'r') as file:
+            graph_data = file.readlines()
+            DM = graph_data[1].split('\t')[1]
+            traces["DUTw"][str(DUTw)]["|DM|"].append(float(DM))
+
+    for DUTw in traces["DUTw"]:
+        void_widths, diff_mode = traces["DUTw"][DUTw]["voidw"], traces["DUTw"][DUTw]["|DM|"]
+        void_widths, diff_mode = (list(t) for t in zip(*sorted(zip(void_widths, diff_mode))))
+        plt.plot(void_widths, diff_mode, label=  DUTw)
+
+    plt.legend()
+    plt.show()
+    print(traces)
+
+            
 
 
 
@@ -219,8 +268,6 @@ def graph():
     plt.plot(x, dB)
     plt.show()
 
-
-
 def space_res():
     global lead_l       #every other scope sees changes made to lead_l here
     for i in range(200, 300, 10):
@@ -230,7 +277,6 @@ def space_res():
         draw_interconnect()
         output()    #simulates and outputs
         print("simulation done for lead_l:  {}".format(lead_l))
-
 
 def void_testing():
     global void_w   #every other scope sees changes made to void_w here
@@ -243,8 +289,10 @@ def void_testing():
         print("simulation done for void_w:  {}".format(void_w))
         
 def main():
+    #figure1()
+    plot_figure1()
     #void_testing()
-    graph()
+    #graph()
   
 main()
 
