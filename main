@@ -22,12 +22,12 @@ em = awrde.Project.EMStructures("EM Structure 2")
 #peak: 115
 #trough: 100
 ## units in microns ##
-wafer_t = 0.72
-SiO2_t = 0.01875
+wafer_t = 10
+SiO2_t = 10
 
 Width = 250
 Length = 500
-lead_spacing = 15
+lead_spacing = 16  #round to even number to keep ports on grid
 lead_l = 20
 trace_w = 5
 
@@ -38,14 +38,20 @@ trough = 0
 
 enc_l = 550
 enc_w = 400
+
+##enc_l = 550
+#enc_w = 1000
 em.Enclosure.XDimension = enc_l*1e-6
 em.Enclosure.YDimension = enc_w*1e-6
 
-metal_t = 0.001
-LTO_t = 3
-DUT_w = 10
+metal_t = 1
+LTO_t = 10
 
-void_w = 10
+DUT_w = 1
+DUT_y = 100
+rotate_verticle = False
+void_w = 0
+void_x = 0
 draw_void = True
 
 #split ring resonnator#
@@ -62,6 +68,17 @@ r2_d = 50   #ring2 diameter
 r2_w = 3    #ring2 width
 r2_g = 1    #ring2 gap
 
+# em.MaterialLayers.Item(1).Thickness = 10/(10**6)     ##LTO_t thickness
+# em.MaterialLayers.Item(2).Thickness = LTO_t/(10**6)     ##LTO_t thickness
+# em.MaterialLayers.Item(3).Thickness = SiO2_t/(10**6)     ##LTO_t thickness
+# em.MaterialLayers.Item(4).Thickness = 10/(10**6)     ##Si thickness
+
+# copper = em.Materials.Item("Copper")
+
+
+# copper = em.MaterialLayers(4)
+# print(copper.BulkConductivity)
+# copper.BulkConductivity = 6
 
 def draw_resonnator():
     x_base = 0
@@ -101,7 +118,8 @@ def draw_resonnator():
     
 def draw_antenna():
     pathWrite = em.DrawingObjects.PathWriter
-    pathWrite.LayerName = "Thick Metal"
+    #pathWrite.LayerName = "Thick Metal"
+    pathWrite.LayerName = "Metal4"
     pathWrite.Width = trace_w*1e-6
     pathRec = pathWrite.CreatePathRecord()
 
@@ -129,9 +147,9 @@ def draw_antenna():
         x+=(Length-2*delay)/(period*2-1)
         pathRec.AddSegment(x*1e-6,y*1e-6)
     pathRec.AddSegment(x*1e-6,y*1e-6)
-    pathRec.Offset(((enc_l-lead_spacing)/2-trace_w)*1e-6,0)
+    pathRec.Offset(((enc_l-lead_spacing-trace_w)/2)*1e-6,0)
     path = pathWrite.AddPath(pathRec)  
-    pathRec.Mirror((enc_l/2 - trace_w)*1e-6)
+    pathRec.Mirror((enc_l/2)*1e-6)
     path1 = pathWrite.AddPath(pathRec)
                                                                                          ##Port Number##
     em.Shapes.AddFace(((enc_l-lead_spacing)/2-trace_w)*1e-6,0,(enc_l-lead_spacing)/2*1e-6,0, int(1))
@@ -142,11 +160,11 @@ def draw_antenna():
     port2.ReferencePlaneDist = lead_l * 0.6e-6
     
 def draw_interconnect():
-    interconnect = em.DrawingObjects.AddRectangle(0, math.floor((enc_w-DUT_w)/2)*1e-6, enc_l*1e-6, math.floor(DUT_w)*1e-6, "Gatepad")
-    port3 = em.Shapes.AddFace(0, (enc_w-DUT_w)/2*1e-6, 0, (enc_w/2+DUT_w)*1e-6, 3)
+    interconnect = em.DrawingObjects.AddRectangle(0, math.floor((enc_w-DUT_w)/2 + DUT_y)*1e-6, enc_l*1e-6, math.floor(DUT_w)*1e-6, "Gatepad")
+    port3 = em.Shapes.AddFace(0, ((enc_w-DUT_w)/2 + DUT_y)*1e-6, 0, ((enc_w/2+DUT_w) + DUT_y)*1e-6, 3)
     port3 = em.Ports.Item(3)
-    port4 = em.Shapes.AddFace(enc_l*1e-6, math.floor((enc_w-DUT_w)/2)*1e-6, enc_l*1e-6, math.floor((enc_w/2+DUT_w))*1e-6, 4)
-    void = em.DrawingObjects.AddEllipse((enc_l/2)*1e-6, (enc_w - DUT_w - void_w)/2*1e-6, void_w*1e-6, void_w*1e-6, "Gatepad")
+    port4 = em.Shapes.AddFace(enc_l*1e-6, math.floor((enc_w-DUT_w)/2 + DUT_y)*1e-6, enc_l*1e-6, math.floor((enc_w/2+DUT_w) + DUT_y)*1e-6, 4)
+    void = em.DrawingObjects.AddEllipse(((enc_l-void_w)/2+void_x)*1e-6, (enc_w - DUT_w - void_w)/2*1e-6, void_w*1e-6, void_w*1e-6, "Gatepad")
     em.SelectedObjects.Add(interconnect)
     em.SelectedObjects.Add(void)
     em.InvokeCommand("ShapeSubtract", 2, None)
@@ -167,9 +185,9 @@ def output(graph, folder, title):
     #print(type(graph))
     graph.SimulateMeasurements()
     # graph_printed = graph.ExportTraceData("C:/Users/muhaa/Documents/AWR Projects/data/void_testing/{}".format(lead_l - 500))  ##for spacial resolution testing
-    print(path + folder + title + ".txt")
+    #print(path + folder + title + ".txt")
     graph_printed = graph.ExportTraceData(path + folder + title)
-    print(graph_printed)
+    print("graph printed", graph_printed)
     #print("graph printeda for lead_l {}: {}".format(lead_l, graph_printed))
 
 def figure1():                             #figure 1: coupling vs void_width for each DUT_w
@@ -177,7 +195,7 @@ def figure1():                             #figure 1: coupling vs void_width for
     global DUT_w
     for i in range(5, 55, 5):              #interconnect width
         DUT_w = i                  
-        radius_range = np.linspace(0, i*2, num=10, endpoint=True)              #void radius   
+        radius_range = np.linspace(0, i*2*.99, num=10, endpoint=True)              #void radius   
         #print(radius_range)
    
         for j in radius_range:      
@@ -186,13 +204,31 @@ def figure1():                             #figure 1: coupling vs void_width for
             draw_antenna()
             draw_interconnect()
             output("Differential Mode", "figure1/", "DUTw{}_voidw{}".format(int(DUT_w*1000), int(void_w*1000)))
+            output("Common Mode", "figure1/CM/", "DUTw{}_voidw{}".format(int(DUT_w*1000), int(void_w*1000)))
 
-def plot_figure1():
-    f1_path = path + "figure1/"
+def plot_figure(directory, x_axis, y_axis, legend):
+    CM_traces = plot_mode(directory + "/CM/", "Common Mode coupling with varying " + legend, x_axis, y_axis, legend)
+    DM_traces = plot_mode(directory + "/DM/", "Differential Mode coupling with varying " + legend, x_axis, y_axis, legend)
+
+    for DUTw in CM_traces["DUTw"]:
+        void_widths =  CM_traces["DUTw"][DUTw]["voidw"]
+        CM_data = CM_traces["DUTw"][DUTw]["|DM|"]
+        DM_data = DM_traces["DUTw"][DUTw]["|DM|"]
+        ratio = [CM_data[i]/DM_data[i] for i in range(len(CM_data))]
+        plt.plot(void_widths, ratio, label=  DUTw)
+
+    legend_ob = plt.legend()
+    legend_ob.set_title(legend)
+    plt.title("Ratio of CM to DM coupling with varying " + legend)
+    plt.show()
+
+def plot_mode(directory, title, x_axis, y_axis, legend):
+
+    f1_path = path + directory
     file_list = os.listdir(f1_path)
     traces = {"DUTw": {}}
     for filename in file_list:
-        numbers = re.findall(r'\d+', filename)               #list of group numbers
+        numbers = re.findall(r'-?\d+', filename)               #list of group numbers
         DUTw = str(float(numbers[0])/1000)                                    #DUTw numeric value
         voidw = numbers[1]                                  #voidw numeric
         words = re.findall(r'[a-zA-Z]+', filename)        #list of grouped letters, DUTw, voidw
@@ -204,19 +240,68 @@ def plot_figure1():
             graph_data = file.readlines()
             DM = graph_data[1].split('\t')[1]
             traces["DUTw"][str(DUTw)]["|DM|"].append(float(DM))
+       
 
     for DUTw in traces["DUTw"]:
-        void_widths, diff_mode = traces["DUTw"][DUTw]["voidw"], traces["DUTw"][DUTw]["|DM|"]
+        void_widths, diff_mode = traces["DUTw"][DUTw]["voidw"], traces["DUTw"][DUTw]["|DM|"]        #sort entries
         void_widths, diff_mode = (list(t) for t in zip(*sorted(zip(void_widths, diff_mode))))
+        traces["DUTw"][DUTw]["voidw"], traces["DUTw"][DUTw]["|DM|"] = void_widths, diff_mode        #reassign sorted entries
         plt.plot(void_widths, diff_mode, label=  DUTw)
-
-    plt.legend()
+        #break
+    plt.xlabel(x_axis)
+    plt.ylabel(y_axis)
+    plt.title(title)
+    legend_ob = plt.legend()
+    legend_ob.set_title(legend)
     plt.show()
-    print(traces)
 
-            
+    return(traces)
+
+def figure2():          #LTO_t
+    global void_w   #every other scope sees changes made to void_w here
+    global LTO_t
+    for i in range( 5, 55, 10):              #LTO range
+        LTO_t = i
+        em.MaterialLayers.Item(2).Thickness = LTO_t/(10**6)     ##LTO_t thickness
+        radius_range = np.linspace(0, DUT_w*2*.95, num=10, endpoint=True)              #void radius   
+        for j in radius_range:      
+            void_w = j                                        #void radius loop
+            reset()
+            draw_antenna()
+            draw_interconnect()
+            output("Differential Mode", "figure2/DM/", "LTOt{}_voidw{}".format(int(LTO_t*1000), int(void_w*1000)))
+            output("Common Mode", "figure2/CM/", "LTOt{}_voidw{}".format(int(LTO_t*1000), int(void_w*1000)))
+    return
 
 
+def figure3():          # void_x
+    global void_w   #every other scope sees changes made to void_w here
+    global void_x
+    for i in range( 0, -240, -40):              #LTO range
+        void_x = i
+        radius_range = np.linspace(0, DUT_w*2*.95, num=10, endpoint=True)              #void radius   
+        for j in radius_range:      
+            void_w = j                                        #void radius loop
+            reset()
+            draw_antenna()
+            draw_interconnect()
+            output("Differential Mode", "figure3/DM/", "voidx{}_voidw{}".format(int(void_x*1000), int(void_w*1000)))
+            output("Common Mode", "figure3/CM/", "voidx{}_voidw{}".format(int(void_x*1000), int(void_w*1000)))
+    return
+
+
+def figure4():          # DUT_y
+    global void_w   
+    global DUT_y
+    offset_range = np.linspace(400, -400, num=20, endpoint=True)              #void radius   
+    for j in offset_range:      
+        DUT_y = j                                        #void radius loop
+        reset()
+        draw_antenna()
+        draw_interconnect()
+        output("Differential Mode", "figure4/DM/", "DUTw{}_DUTy{}".format(int(DUT_w*1000), int(DUT_y*1000)))
+        output("Common Mode", "figure4/CM/", "DUTw{}_DUTy{}".format(int(DUT_w*1000), int(DUT_y*1000)))
+    return
 
 def graph():
     i = 0
@@ -289,15 +374,19 @@ def void_testing():
         print("simulation done for void_w:  {}".format(void_w))
         
 def main():
-    #figure1()
-    plot_figure1()
-    #void_testing()
+    # reset()
+    draw_antenna()
+    draw_interconnect()
+    # figure4()
+    # figure3()
+    # plot_figure("figure1", "trace width", "magnitude", "interconnect width")
+    plot_figure("figure2", "trace width", "magnitude", "SiO2 thickness")
+    # plot_figure("figure3", "trace width", "magnitude", "void x position ")
+    plot_figure("figure4", "trace x-offset", "magnitude", "DUTw")
+    # #void_testing()
     #graph()
   
 main()
-
-
-
 #base lead_l position in y direction: 500
 
 
