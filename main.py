@@ -8,7 +8,9 @@ import numpy as np
 import os
 import re
 
-path = "C:/Users/muhaa/Desktop/Research/Journal paper/data/"
+##path = "C:/Users/muhaa/Desktop/Research/Journal paper/data/"
+
+path = "null"
 
 awrde = mwo.CMWOffice()
 
@@ -47,10 +49,10 @@ em.Enclosure.YDimension = enc_w*1e-6
 metal_t = 1
 LTO_t = 10
 
-DUT_w = 1
-DUT_y = 100
+DUT_w = 10
+DUT_y = 0
 rotate_verticle = False
-void_w = 0
+void_w = 14
 void_x = 0
 draw_void = True
 
@@ -75,10 +77,10 @@ r2_g = 1    #ring2 gap
 
 # copper = em.Materials.Item("Copper")
 
+#print(em.Materials.Count)
+#print(em.Materials.Exists("Copper"))            ##This is case sensitive
+#copper = em.Materials.Item("Copper")
 
-# copper = em.MaterialLayers(4)
-# print(copper.BulkConductivity)
-# copper.BulkConductivity = 6
 
 def draw_resonnator():
     x_base = 0
@@ -117,9 +119,9 @@ def draw_resonnator():
         y_base+=cell_size
     
 def draw_antenna():
+
     pathWrite = em.DrawingObjects.PathWriter
-    #pathWrite.LayerName = "Thick Metal"
-    pathWrite.LayerName = "Metal4"
+    pathWrite.LayerName = "Thick Metal"
     pathWrite.Width = trace_w*1e-6
     pathRec = pathWrite.CreatePathRecord()
 
@@ -154,22 +156,22 @@ def draw_antenna():
                                                                                          ##Port Number##
     em.Shapes.AddFace(((enc_l-lead_spacing)/2-trace_w)*1e-6,0,(enc_l-lead_spacing)/2*1e-6,0, int(1))
     port1 = em.Ports.Item(1)
-    port1.ReferencePlaneDist = lead_l * 0.6e-6
+   #  port1.ReferencePlaneDist = lead_l * 0.6e-6
     em.Shapes.AddFace(((enc_l+lead_spacing)/2)*1e-6,0, ((enc_l+lead_spacing)/2+trace_w)*1e-6,0, int(2))
     port2 = em.Ports.Item(2)
-    port2.ReferencePlaneDist = lead_l * 0.6e-6
+   # port2.ReferencePlaneDist = lead_l * 0.6e-6
     
 def draw_interconnect():
     interconnect = em.DrawingObjects.AddRectangle(0, math.floor((enc_w-DUT_w)/2 + DUT_y)*1e-6, enc_l*1e-6, math.floor(DUT_w)*1e-6, "Gatepad")
     port3 = em.Shapes.AddFace(0, ((enc_w-DUT_w)/2 + DUT_y)*1e-6, 0, ((enc_w/2+DUT_w) + DUT_y)*1e-6, 3)
     port3 = em.Ports.Item(3)
     port4 = em.Shapes.AddFace(enc_l*1e-6, math.floor((enc_w-DUT_w)/2 + DUT_y)*1e-6, enc_l*1e-6, math.floor((enc_w/2+DUT_w) + DUT_y)*1e-6, 4)
-    void = em.DrawingObjects.AddEllipse(((enc_l-void_w)/2+void_x)*1e-6, (enc_w - DUT_w - void_w)/2*1e-6, void_w*1e-6, void_w*1e-6, "Gatepad")
+    void = em.DrawingObjects.AddEllipse(((enc_l-void_w)/2+void_x)*1e-6, math.floor((enc_w - DUT_w - void_w)/2)*1e-6, void_w*1e-6, void_w*1e-6, "Gatepad")
     em.SelectedObjects.Add(interconnect)
-    em.SelectedObjects.Add(void)
-    em.InvokeCommand("ShapeSubtract", 2, None)
+    if(draw_void == True):
+        em.SelectedObjects.Add(void)
+        em.InvokeCommand("ShapeSubtract", 2, None)
  
-  
 def reset():
     #print("previous object count: ", em.DrawingObjects.Count)
     em.SelectedObjects.AddAll()
@@ -193,9 +195,10 @@ def output(graph, folder, title):
 def figure1():                             #figure 1: coupling vs void_width for each DUT_w
     global void_w   #every other scope sees changes made to void_w here
     global DUT_w
-    for i in range(5, 55, 5):              #interconnect width
+    for i in [5, 10, 15, 20, 25, 30]:              #interconnect width
         DUT_w = i                  
-        radius_range = np.linspace(0, i*2*.99, num=10, endpoint=True)              #void radius   
+        # radius_range = np.linspace(0, i*2*.99, num=25, endpoint=True)              #void radius   
+        radius_range = np.linspace(i*2*.80, i*2*.99, num=20, endpoint=True)              #void radius   
         #print(radius_range)
    
         for j in radius_range:      
@@ -203,8 +206,9 @@ def figure1():                             #figure 1: coupling vs void_width for
             reset()
             draw_antenna()
             draw_interconnect()
-            output("Differential Mode", "figure1/", "DUTw{}_voidw{}".format(int(DUT_w*1000), int(void_w*1000)))
+            output("Differential Mode", "figure1/DM/", "DUTw{}_voidw{}".format(int(DUT_w*1000), int(void_w*1000)))
             output("Common Mode", "figure1/CM/", "DUTw{}_voidw{}".format(int(DUT_w*1000), int(void_w*1000)))
+
 
 def plot_figure(directory, x_axis, y_axis, legend):
     CM_traces = plot_mode(directory + "/CM/", "Common Mode coupling with varying " + legend, x_axis, y_axis, legend)
@@ -220,6 +224,7 @@ def plot_figure(directory, x_axis, y_axis, legend):
     legend_ob = plt.legend()
     legend_ob.set_title(legend)
     plt.title("Ratio of CM to DM coupling with varying " + legend)
+    plt.xlabel("void_width")
     plt.show()
 
 def plot_mode(directory, title, x_axis, y_axis, legend):
@@ -246,8 +251,10 @@ def plot_mode(directory, title, x_axis, y_axis, legend):
         void_widths, diff_mode = traces["DUTw"][DUTw]["voidw"], traces["DUTw"][DUTw]["|DM|"]        #sort entries
         void_widths, diff_mode = (list(t) for t in zip(*sorted(zip(void_widths, diff_mode))))
         traces["DUTw"][DUTw]["voidw"], traces["DUTw"][DUTw]["|DM|"] = void_widths, diff_mode        #reassign sorted entries
+        # if(DUTw != "30.0"):
+        #     continue
         plt.plot(void_widths, diff_mode, label=  DUTw)
-        #break
+
     plt.xlabel(x_axis)
     plt.ylabel(y_axis)
     plt.title(title)
@@ -302,6 +309,27 @@ def figure4():          # DUT_y
         output("Differential Mode", "figure4/DM/", "DUTw{}_DUTy{}".format(int(DUT_w*1000), int(DUT_y*1000)))
         output("Common Mode", "figure4/CM/", "DUTw{}_DUTy{}".format(int(DUT_w*1000), int(DUT_y*1000)))
     return
+
+def figure5():      #figure 5: coupling vs void_width for each DUT_w
+    global void_w   #every other scope sees changes made to void_w here
+    global DUT_w 
+    DUT_w = 40      #choose DUT_w here
+
+    ## 4342289.08	4120521.31	3329233.993 ##
+    anneal_times = [90]      #anneal times (seconds)
+
+    for i in anneal_times:              #interconnect width             
+        radius_range = np.linspace(0, DUT_w*2*.99, num=8, endpoint=True)              #void radius   
+
+        for j in radius_range:      
+            void_w = j                                        #void radius loop
+            reset()
+            draw_antenna()
+            draw_interconnect()
+            output("Differential Mode", "figure5/DM/", "anneal_time{}_voidw{}".format(int(i*1000), int(void_w*1000)))
+            output("Common Mode", "figure5/CM/", "anneal_time{}_voidw{}".format(int(i*1000), int(void_w*1000)))
+        plot_figure("figure5", "void width", "magnitude", "annealing time")
+        input("change copper conductivity in AWR and then press enter")
 
 def graph():
     i = 0
@@ -374,15 +402,21 @@ def void_testing():
         print("simulation done for void_w:  {}".format(void_w))
         
 def main():
-    # reset()
-    draw_antenna()
-    draw_interconnect()
+    #reset()
+    ##draw_antenna()
+    #draw_interconnect()
+    # figure1()
     # figure4()
     # figure3()
-    # plot_figure("figure1", "trace width", "magnitude", "interconnect width")
-    # plot_figure("figure2", "trace width", "magnitude", "SiO2 thickness")
-    # plot_figure("figure3", "trace width", "magnitude", "void x position ")
-    # plot_figure("figure4", "trace x-offset", "magnitude", "DUTw")
+    # figure1()
+    #figure5()
+
+    plot_figure("figure1", "trace width", "magnitude", "interconnect width")
+    plot_figure("figure2", "trace width", "magnitude", "SiO2 thickness")
+    plot_figure("figure3", "trace width", "magnitude", "void x position ")
+    plot_figure("figure4", "trace x-offset", "magnitude", "DUTw")
+    plot_figure("figure5", "void width", "magnitude", "annealing time")
+    
     # #void_testing()
     #graph()
   
